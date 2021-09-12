@@ -128,7 +128,7 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
-src/config.json
+config.json
 *.dll
 *.avi
 *.mp4
