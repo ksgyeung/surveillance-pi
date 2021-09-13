@@ -1,5 +1,5 @@
 from surveillance.frame import Frame
-from surveillance import frame_queue
+from surveillance import detect_frame, frame_queue
 import cv2
 from os import path
 import sys
@@ -45,8 +45,8 @@ def run(root):
     fourcc = cv2.VideoWriter_fourcc(*'H264')
 
     camera = 2
-    #cap = BufferedVideoCapture(path.join(root, 'demo30.mkv'), 30)
-    cap = BufferedVideoCapture(2, 30)
+    cap = BufferedVideoCapture(path.join(root, 'demo30.mkv'), 30)
+    #cap = BufferedVideoCapture(2, 30)
     if not cap.isOpened():
         print('Canont open capture')
         sys.exit(1)
@@ -64,18 +64,11 @@ def run(root):
     fps_stabliser = FpsStabliser(FPS)
     fps_counter = FpsCounter()
 
-    background_task1 = BackgroundTask()
-    background_task1_fps_counter = TimeBaseFpsCounter()
-    background_task2 = BackgroundTask()
-    background_task2_fps_counter = TimeBaseFpsCounter()
     background_task3 = BackgroundTask()
     background_task3_fps_counter = TimeBaseFpsCounter()
     background_task3_task_worker = TaskWorker(background_task3_fps_counter)
 
     frame_queue = FrameQueue()
-
-    last_detect_frame1 = None
-    last_detect_frame2 = None
 
     last_detected_time = None
     last_detected_rects = None
@@ -91,24 +84,7 @@ def run(root):
             #detected_time_list = list(filter(lambda x: x >= now - 1800 , detected_time_list))
 
             fps_counter.tick(callback=lambda fps: print('FPS: {}'.format(fps)))
-            #fps_stabliser.stablise()
-
-            """
-            if background_task2.state() == STATE_IDLE:
-                if last_detect_frame1 is not None and last_detect_frame2 is not None:
-                    background_task2.submit_task(motion_detector.detect_motion, last_detect_frame1, last_detect_frame2, background_task2_fps_counter)
-
-            if background_task2.state() == STATE_RESULT_AVAILABLE:
-                detected_rects = background_task2.result()
-                background_task2.clear_result()
-
-                last_detect_frame1 = None
-                last_detect_frame2 = None
-
-                last_detected_time = now
-                last_detected_rects = detected_rects
-                detected_time_list.append(now)
-            """
+            fps_stabliser.stablise()
 
             if background_task3.state() == STATE_RESULT_AVAILABLE:
                 detected_rects = background_task3.result()
@@ -131,21 +107,6 @@ def run(root):
             frame_queue.push(frame)
             #print('{}x{}'.format(frame.frame.shape[0], frame.frame.shape[1]))
             
-            """
-            if fps_counter.fps() % 2 == 0:
-                if last_detect_frame1 is None or last_detect_frame2 is None:
-                    if background_task2.state() == STATE_IDLE and background_task1.state() == STATE_IDLE:
-                        background_task1.submit_task(motion_detector.make_detect_frame, frame, background_task1_fps_counter)
-
-            if background_task1.state() == STATE_RESULT_AVAILABLE:
-                if last_detect_frame1 is None:
-                    last_detect_frame1 = background_task1.result()
-                elif last_detect_frame2 is None:
-                    last_detect_frame2 = background_task1.result()
-                else:
-                    pass
-                background_task1.clear_result()
-            """
 
             if fps_counter.fps() % (FPS / 10) == 0 and background_task3.state() == STATE_IDLE:
                 background_task3.submit_task(background_task3_task_worker.push, frame)
@@ -154,7 +115,7 @@ def run(root):
             if recent_detected_count > 0:
                 if video_recoder is None:
                     print('motion triggered')
-                    filename = '{}.mkv'.format(file_time)
+                    filename = '{}.mkv'.format(file_time(last_detected_time))
                     save_path = path.join(root, filename)
                     video_recoder = BufferedVideoWriter(fourcc, save_path, FPS, WIDTH, HEIGHT)
                     
@@ -166,9 +127,8 @@ def run(root):
             if video_recoder is not None:
                 
                 # consume all buffered frame
-                for x in frame_queue:
+                for x, _ in frame_queue:
                     video_recoder.write(x)
-                frame_queue = FrameQueue()
                 video_recoder.write(frame)
                 pass
 
@@ -182,8 +142,6 @@ def run(root):
         if video_recoder is not None:
             video_recoder.release()
         
-        background_task1.shutdown()
-        background_task2.shutdown()
         background_task3.shutdown()
 
     avg_fps = round(statistics.mean(fps_counter.stat()), 2)

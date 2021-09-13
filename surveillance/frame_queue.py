@@ -81,7 +81,7 @@ class FrameQueue:
 
     def __next__(self):
         if self._current is None:
-            return StopIteration
+            raise StopIteration
         ret1, ret2 = self._current.value, self._current.id
         self._current = self._current.nextNode
         return ret1, ret2
